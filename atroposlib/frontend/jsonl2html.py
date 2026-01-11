@@ -28,6 +28,54 @@ TEMPLATE_FILE = SCRIPT_DIR / "template.html"
 # --- Helper Functions ---
 
 
+def format_message_content(message_data):
+    """
+    Format message content for HTML rendering.
+    Handles multiple formats:
+    - Strings: passed through as-is
+    - Message dicts: formatted as "**Role:** content"
+    - Conversations (list of dicts): joined with separators
+    - Nested structures: handled recursively
+    """
+    if isinstance(message_data, str):
+        return message_data
+
+    elif isinstance(message_data, dict):
+        # Handle Message dict format: {"role": "system", "content": "..."}
+        role = message_data.get("role", "unknown")
+        content = message_data.get("content", "")
+
+        # Format content if it's not a string
+        if isinstance(content, list):
+            # Handle list content (e.g., multimodal content)
+            formatted_content = " ".join(
+                str(item) if not isinstance(item, dict) else item.get("text", str(item))
+                for item in content
+            )
+        else:
+            formatted_content = str(content)
+
+        return f"**{role.capitalize()}:**\n{formatted_content}"
+
+    elif isinstance(message_data, list):
+        # Handle list of messages or nested structures
+        formatted_messages = []
+        for item in message_data:
+            formatted_messages.append(format_message_content(item))
+
+        # Join with separators based on nesting level
+        if any(isinstance(item, (dict, list)) for item in message_data):
+            # This is a conversation with multiple messages
+            return "\n---\n".join(formatted_messages)
+        else:
+            # Simple list of strings
+            return "\n".join(formatted_messages)
+
+    else:
+        # Fallback for any other type
+        return str(message_data)
+
+
 def get_score_class(score):
     """Determines the CSS class based on the score."""
     try:
@@ -60,8 +108,10 @@ def create_html_for_group(group_data, index):
 
     items_html = ""
     for i, (msg, score) in enumerate(zip(messages, scores)):
+        # Format message content for proper markdown rendering
+        formatted_content = format_message_content(msg)
         rendered_markdown = markdown.markdown(
-            msg, extensions=["fenced_code", "tables", "nl2br"]
+            formatted_content, extensions=["fenced_code", "tables", "nl2br"]
         )
         score_class = get_score_class(score)
         item_id = f"group-{index}-item-{i}"
